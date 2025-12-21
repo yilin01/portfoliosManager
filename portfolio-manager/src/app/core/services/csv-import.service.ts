@@ -14,7 +14,7 @@ export class CSVImportService {
 
     /**
      * Parse CSV content into holdings
-     * Expected columns: Symbol, Name, Type, Shares, AvgCost, CurrentPrice
+     * Expected columns: Symbol, Name, Type, Shares, AvgCost, CurrentPrice, CurrentValue (for cash holdings)
      * Column names are case-insensitive and flexible (e.g., "avg cost", "average_cost", "avgcost" all work)
      */
     parseCSV(content: string): CSVParseResult {
@@ -95,6 +95,8 @@ export class CSVImportService {
      * Map CSV headers to expected column names
      */
     private mapColumns(headers: string[]): Record<string, number | null> {
+        console.log('CSV Import - Normalized Headers:', headers);
+
         const findColumn = (patterns: string[]): number | null => {
             for (const pattern of patterns) {
                 const index = headers.findIndex(h => h.includes(pattern));
@@ -103,14 +105,18 @@ export class CSVImportService {
             return null;
         };
 
-        return {
+        const map = {
             symbol: findColumn(['symbol', 'ticker', 'stock']),
             name: findColumn(['description', 'company', 'name']),
-            type: findColumn(['type', 'assettype', 'securitytype']),
+            type: findColumn(['assettype', 'securitytype']),
             shares: findColumn(['shares', 'quantity', 'qty', 'units']),
-            avgCost: findColumn(['avgcost', 'averagecost', 'costbasis', 'cost', 'purchaseprice']),
-            currentPrice: findColumn(['currentprice', 'price', 'lastprice', 'marketprice', 'close'])
+            avgCost: findColumn(['avgcost', 'averagecost', 'averagecostbasis', 'costbasis', 'cost', 'purchaseprice']),
+            currentPrice: findColumn(['currentprice', 'price', 'lastprice', 'marketprice', 'close']),
+            currentValue: findColumn(['currentvalue', 'current value', 'value', 'totalvalue'])
         };
+
+        console.log('CSV Import - Column Map:', map);
+        return map;
     }
 
     /**
@@ -136,6 +142,7 @@ export class CSVImportService {
         const sharesStr = getValue('shares').replace(/[,$]/g, '');
         const avgCostStr = getValue('avgCost').replace(/[,$]/g, '');
         const currentPriceStr = getValue('currentPrice').replace(/[,$]/g, '');
+        const currentValueStr = getValue('currentValue').replace(/[,$]/g, '');
 
         // Determine type
         let type: Holding['type'] = 'stock';
@@ -145,11 +152,21 @@ export class CSVImportService {
         else if (typeStr.includes('crypto')) type = 'crypto';
         else if (typeStr.includes('cash')) type = 'cash';
         else if (typeStr.includes('other')) type = 'other';
+        else if (symbol.toLowerCase().includes('cash')) type = 'cash';
 
         // Parse numbers
-        const shares = parseFloat(sharesStr) || 0;
-        const avgCost = parseFloat(avgCostStr) || 0;
-        const currentPrice = parseFloat(currentPriceStr) || avgCost; // Default to avgCost if no current price
+        let shares = parseFloat(sharesStr) || 0;
+        let avgCost = parseFloat(avgCostStr) || 0;
+        let currentPrice = parseFloat(currentPriceStr) || avgCost; // Default to avgCost if no current price
+        const currentValue = parseFloat(currentValueStr) || 0;
+
+        // Handle cash holdings
+        if (shares <= 0 && currentValue > 0) {
+            type = 'cash';
+            shares = 1;
+            currentPrice = currentValue;
+            if (avgCost === 0) avgCost = currentValue;
+        }
 
         if (shares <= 0) {
             return null; // Skip rows with no shares
@@ -172,6 +189,7 @@ export class CSVImportService {
         return `Symbol,Name,Type,Shares,AvgCost,CurrentPrice
 AAPL,Apple Inc,stock,10,150.00,175.00
 MSFT,Microsoft,stock,5,300.00,380.00
-VOO,Vanguard S&P 500 ETF,etf,20,400.00,450.00`;
+VOO,Vanguard S&P 500 ETF,etf,20,400.00,450.00
+CASH,Held in Cash,cash,1,10000.00,10000.00`;
     }
 }
