@@ -163,9 +163,18 @@ export class CSVImportService {
         // Handle cash holdings
         if (shares <= 0 && currentValue > 0) {
             type = 'cash';
-            shares = 1;
-            currentPrice = currentValue;
-            if (avgCost === 0) avgCost = currentValue;
+            shares = currentValue;
+            currentPrice = 1;
+            avgCost = 1;
+        }
+
+        // Ensure cash holdings have correct values
+        if (type === 'cash') {
+            avgCost = 1;
+            currentPrice = 1;
+            if (currentValue > 0) {
+                shares = currentValue;
+            }
         }
 
         if (shares <= 0) {
@@ -190,6 +199,6 @@ export class CSVImportService {
 AAPL,Apple Inc,stock,10,150.00,175.00
 MSFT,Microsoft,stock,5,300.00,380.00
 VOO,Vanguard S&P 500 ETF,etf,20,400.00,450.00
-CASH,Held in Cash,cash,1,10000.00,10000.00`;
+CASH,Held in Cash,cash,10000.00,1,1`;
     }
 }
