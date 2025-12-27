@@ -440,10 +440,12 @@ export class DashboardComponent {
     const portfolios = this.portfolioService.portfolios();
     if (portfolios.length === 0) return;
 
-    // Collect all unique symbols from all portfolios
+    // Collect all unique symbols from all portfolios (excluding cash)
     const allSymbols = new Set<string>();
     portfolios.forEach(p => {
-      p.holdings.forEach(h => allSymbols.add(h.symbol.toUpperCase()));
+      p.holdings
+        .filter(h => h.type !== 'cash')
+        .forEach(h => allSymbols.add(h.symbol.toUpperCase()));
     });
 
     if (allSymbols.size === 0) return;
@@ -453,20 +455,33 @@ export class DashboardComponent {
 
     this.stockPriceService.getQuotes([...allSymbols]).subscribe({
       next: (quotes) => {
-        let updatedCount = 0;
+        // Build a single price map from all fetched quotes
+        const priceUpdates = new Map<string, number>();
+        quotes.forEach((quote, symbol) => priceUpdates.set(symbol, quote.price));
+
+        // Update each portfolio using batch method
+        let completedCount = 0;
+        const totalPortfolios = portfolios.length;
+
         portfolios.forEach(portfolio => {
-          portfolio.holdings.forEach(holding => {
-            const quote = quotes.get(holding.symbol.toUpperCase());
-            if (quote) {
-              this.portfolioService.updateHolding(portfolio.id, holding.id, {
-                currentPrice: quote.price
-              });
-              updatedCount++;
+          this.portfolioService.updateHoldingPrices(portfolio.id, priceUpdates).subscribe({
+            next: () => {
+              completedCount++;
+              if (completedCount === totalPortfolios) {
+                this.isRefreshing.set(false);
+                this.refreshProgress.set(`${priceUpdates.size} prices updated`);
+              }
+            },
+            error: (err) => {
+              console.error(`Error updating portfolio ${portfolio.id}:`, err);
+              completedCount++;
+              if (completedCount === totalPortfolios) {
+                this.isRefreshing.set(false);
+                this.refreshProgress.set('Some updates failed');
+              }
             }
           });
         });
-        this.isRefreshing.set(false);
-        this.refreshProgress.set(`${updatedCount} updated`);
       },
       error: (err) => {
         console.error('Error refreshing prices:', err);
