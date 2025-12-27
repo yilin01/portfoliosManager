@@ -1,5 +1,5 @@
 import { Component, inject, signal, computed } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CommonModule, CurrencyPipe, PercentPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { PortfolioService } from '../../../core/services/portfolio.service';
@@ -454,7 +454,7 @@ import { Holding, calculateHoldingValue, calculateHoldingCost, calculateHoldingG
 })
 export class PortfolioDetailComponent {
   private route = inject(ActivatedRoute);
-  private router = inject(Router);
+
   private portfolioService = inject(PortfolioService);
   private stockPriceService = inject(StockPriceService);
   private csvImportService = inject(CSVImportService);
@@ -573,18 +573,22 @@ export class PortfolioDetailComponent {
 
     this.stockPriceService.getQuotes(symbols).subscribe({
       next: (quotes) => {
-        let updatedCount = 0;
-        p.holdings.forEach(holding => {
-          const quote = quotes.get(holding.symbol.toUpperCase());
-          if (quote) {
-            this.portfolioService.updateHolding(p.id, holding.id, {
-              currentPrice: quote.price
-            });
-            updatedCount++;
+        // Build price map from fetched quotes
+        const priceUpdates = new Map<string, number>();
+        quotes.forEach((quote, symbol) => priceUpdates.set(symbol, quote.price));
+
+        // Single batch update to avoid race conditions
+        this.portfolioService.updateHoldingPrices(p.id, priceUpdates).subscribe({
+          next: () => {
+            this.isRefreshing.set(false);
+            this.lastRefreshMessage.set(`Updated ${priceUpdates.size} of ${symbols.length} holdings`);
+          },
+          error: (err) => {
+            console.error('Error saving prices:', err);
+            this.isRefreshing.set(false);
+            this.lastRefreshMessage.set('Error saving prices. Please try again.');
           }
         });
-        this.isRefreshing.set(false);
-        this.lastRefreshMessage.set(`Updated ${updatedCount} of ${symbols.length} holdings`);
       },
       error: (err) => {
         console.error('Error refreshing prices:', err);

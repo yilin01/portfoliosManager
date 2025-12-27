@@ -1,5 +1,6 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Observable, of, tap, map } from 'rxjs';
 import { Portfolio, Holding, generateId, calculatePortfolioValue } from '../models/portfolio.model';
 
 @Injectable({
@@ -176,5 +177,32 @@ export class PortfolioService {
             },
             error: (err) => console.error('Error deleting holding:', err)
         });
+    }
+
+    /**
+     * Batch update holding prices (for price refresh feature)
+     * Updates all prices in a single HTTP request to avoid race conditions
+     */
+    updateHoldingPrices(portfolioId: string, priceUpdates: Map<string, number>): Observable<void> {
+        const portfolio = this.getById(portfolioId);
+        if (!portfolio) return of(void 0);
+
+        const updated = {
+            ...portfolio,
+            holdings: portfolio.holdings.map(h => {
+                const newPrice = priceUpdates.get(h.symbol.toUpperCase());
+                return newPrice !== undefined ? { ...h, currentPrice: newPrice } : h;
+            }),
+            updatedAt: new Date()
+        };
+
+        return this.http.put<Portfolio>(`${this.API_URL}/${portfolioId}`, updated).pipe(
+            tap(() => {
+                this.portfoliosSignal.update(portfolios =>
+                    portfolios.map(p => p.id === portfolioId ? updated : p)
+                );
+            }),
+            map(() => void 0)
+        );
     }
 }
