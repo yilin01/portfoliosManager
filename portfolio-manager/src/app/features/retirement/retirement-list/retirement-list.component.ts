@@ -1,6 +1,6 @@
 import { Component, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { CommonModule, CurrencyPipe, PercentPipe } from '@angular/common';
+import { CommonModule, CurrencyPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RetirementService } from '../../../core/services/retirement.service';
 import { RetirementAccount, RetirementAccountType, getAccountTypeLabel, calculateRetirementAccountValue, getContributionLimit, calculateContributionRemaining } from '../../../core/models/retirement-account.model';
@@ -8,7 +8,7 @@ import { RetirementAccount, RetirementAccountType, getAccountTypeLabel, calculat
 @Component({
   selector: 'app-retirement-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, CurrencyPipe, PercentPipe],
+  imports: [CommonModule, RouterLink, FormsModule, CurrencyPipe],
   template: `
     <div class="page animate-fade-in">
       <header class="page-header">

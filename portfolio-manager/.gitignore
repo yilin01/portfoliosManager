@@ -8,6 +8,8 @@ yarn-error.log*
 dist/
 build/
 out/
+portfolio-manager-darwin-arm64/
+to-darwin-arm64/
 
 # Angular
 .angular/

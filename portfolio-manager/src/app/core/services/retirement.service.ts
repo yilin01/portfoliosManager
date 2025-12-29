@@ -2,12 +2,13 @@ import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { RetirementAccount, RetirementHolding, calculateRetirementAccountValue } from '../models/retirement-account.model';
 import { generateId } from '../models/portfolio.model';
+import { ElectronStorageService } from './electron-storage.service';
 
 @Injectable({
     providedIn: 'root'
 })
 export class RetirementService {
-    private readonly API_URL = '/api/retirementAccounts';
+    private readonly API_URL = 'http://localhost:3000/retirementAccounts';
 
     private accountsSignal = signal<RetirementAccount[]>([]);
 
@@ -17,8 +18,33 @@ export class RetirementService {
         this.accountsSignal().reduce((sum, a) => sum + calculateRetirementAccountValue(a), 0)
     );
 
-    constructor(private http: HttpClient) {
-        this.loadFromServer();
+    constructor(
+        private http: HttpClient,
+        private electronStorage: ElectronStorageService
+    ) {
+        this.loadData();
+    }
+
+    private loadData(): void {
+        if (this.electronStorage.isElectron()) {
+            this.loadFromElectron();
+        } else {
+            this.loadFromServer();
+        }
+    }
+
+    private async loadFromElectron(): Promise<void> {
+        try {
+            const accounts = await this.electronStorage.readCollection<RetirementAccount>('retirementAccounts');
+            const parsed = accounts.map(a => ({
+                ...a,
+                createdAt: new Date(a.createdAt),
+                updatedAt: new Date(a.updatedAt)
+            }));
+            this.accountsSignal.set(parsed);
+        } catch (err) {
+            console.error('Error loading retirement accounts from Electron:', err);
+        }
     }
 
     private loadFromServer(): void {
@@ -35,6 +61,14 @@ export class RetirementService {
         });
     }
 
+    private async saveToElectron(): Promise<void> {
+        try {
+            await this.electronStorage.writeCollection('retirementAccounts', this.accountsSignal());
+        } catch (err) {
+            console.error('Error saving retirement accounts to Electron:', err);
+        }
+    }
+
     getById(id: string): RetirementAccount | undefined {
         return this.accountsSignal().find(a => a.id === id);
     }
@@ -49,16 +83,21 @@ export class RetirementService {
             updatedAt: now
         };
 
-        this.http.post<RetirementAccount>(this.API_URL, account).subscribe({
-            next: (saved) => {
-                this.accountsSignal.update(accounts => [...accounts, {
-                    ...saved,
-                    createdAt: new Date(saved.createdAt),
-                    updatedAt: new Date(saved.updatedAt)
-                }]);
-            },
-            error: (err) => console.error('Error creating account:', err)
-        });
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts => [...accounts, account]);
+            this.saveToElectron();
+        } else {
+            this.http.post<RetirementAccount>(this.API_URL, account).subscribe({
+                next: (saved) => {
+                    this.accountsSignal.update(accounts => [...accounts, {
+                        ...saved,
+                        createdAt: new Date(saved.createdAt),
+                        updatedAt: new Date(saved.updatedAt)
+                    }]);
+                },
+                error: (err) => console.error('Error creating account:', err)
+            });
+        }
     }
 
     update(id: string, data: Partial<Omit<RetirementAccount, 'id' | 'createdAt'>>): void {
@@ -67,25 +106,39 @@ export class RetirementService {
 
         const updated = { ...existing, ...data, updatedAt: new Date() };
 
-        this.http.put<RetirementAccount>(`${this.API_URL}/${id}`, updated).subscribe({
-            next: () => {
-                this.accountsSignal.update(accounts =>
-                    accounts.map(a => a.id === id ? updated : a)
-                );
-            },
-            error: (err) => console.error('Error updating account:', err)
-        });
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.map(a => a.id === id ? updated : a)
+            );
+            this.saveToElectron();
+        } else {
+            this.http.put<RetirementAccount>(`${this.API_URL}/${id}`, updated).subscribe({
+                next: () => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.map(a => a.id === id ? updated : a)
+                    );
+                },
+                error: (err) => console.error('Error updating account:', err)
+            });
+        }
     }
 
     delete(id: string): void {
-        this.http.delete(`${this.API_URL}/${id}`).subscribe({
-            next: () => {
-                this.accountsSignal.update(accounts =>
-                    accounts.filter(a => a.id !== id)
-                );
-            },
-            error: (err) => console.error('Error deleting account:', err)
-        });
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.filter(a => a.id !== id)
+            );
+            this.saveToElectron();
+        } else {
+            this.http.delete(`${this.API_URL}/${id}`).subscribe({
+                next: () => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.filter(a => a.id !== id)
+                    );
+                },
+                error: (err) => console.error('Error deleting account:', err)
+            });
+        }
     }
 
     addHolding(accountId: string, data: Omit<RetirementHolding, 'id'>): void {
@@ -99,14 +152,21 @@ export class RetirementService {
             updatedAt: new Date()
         };
 
-        this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
-            next: () => {
-                this.accountsSignal.update(accounts =>
-                    accounts.map(a => a.id === accountId ? updated : a)
-                );
-            },
-            error: (err) => console.error('Error adding holding:', err)
-        });
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.map(a => a.id === accountId ? updated : a)
+            );
+            this.saveToElectron();
+        } else {
+            this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
+                next: () => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.map(a => a.id === accountId ? updated : a)
+                    );
+                },
+                error: (err) => console.error('Error adding holding:', err)
+            });
+        }
     }
 
     updateHolding(accountId: string, holdingId: string, data: Partial<Omit<RetirementHolding, 'id'>>): void {
@@ -121,14 +181,21 @@ export class RetirementService {
             updatedAt: new Date()
         };
 
-        this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
-            next: () => {
-                this.accountsSignal.update(accounts =>
-                    accounts.map(a => a.id === accountId ? updated : a)
-                );
-            },
-            error: (err) => console.error('Error updating holding:', err)
-        });
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.map(a => a.id === accountId ? updated : a)
+            );
+            this.saveToElectron();
+        } else {
+            this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
+                next: () => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.map(a => a.id === accountId ? updated : a)
+                    );
+                },
+                error: (err) => console.error('Error updating holding:', err)
+            });
+        }
     }
 
     deleteHolding(accountId: string, holdingId: string): void {
@@ -141,13 +208,20 @@ export class RetirementService {
             updatedAt: new Date()
         };
 
-        this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
-            next: () => {
-                this.accountsSignal.update(accounts =>
-                    accounts.map(a => a.id === accountId ? updated : a)
-                );
-            },
-            error: (err) => console.error('Error deleting holding:', err)
-        });
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.map(a => a.id === accountId ? updated : a)
+            );
+            this.saveToElectron();
+        } else {
+            this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
+                next: () => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.map(a => a.id === accountId ? updated : a)
+                    );
+                },
+                error: (err) => console.error('Error deleting holding:', err)
+            });
+        }
     }
 }
