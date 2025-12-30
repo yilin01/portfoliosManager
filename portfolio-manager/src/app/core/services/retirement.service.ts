@@ -1,5 +1,7 @@
 import { Injectable, signal, computed } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { Observable, of } from 'rxjs';
+import { map, tap } from 'rxjs/operators';
 import { RetirementAccount, RetirementHolding, calculateRetirementAccountValue } from '../models/retirement-account.model';
 import { generateId } from '../models/portfolio.model';
 import { ElectronStorageService } from './electron-storage.service';
@@ -166,6 +168,75 @@ export class RetirementService {
                 },
                 error: (err) => console.error('Error adding holding:', err)
             });
+        }
+    }
+
+    /**
+     * Add multiple holdings at once (for CSV import)
+     */
+    addHoldings(accountId: string, holdings: Omit<RetirementHolding, 'id'>[]): void {
+        const account = this.getById(accountId);
+        if (!account || holdings.length === 0) return;
+
+        const newHoldings: RetirementHolding[] = holdings.map(h => ({
+            ...h,
+            id: generateId()
+        }));
+
+        const updated = {
+            ...account,
+            holdings: [...account.holdings, ...newHoldings],
+            updatedAt: new Date()
+        };
+
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.map(a => a.id === accountId ? updated : a)
+            );
+            this.saveToElectron();
+        } else {
+            this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).subscribe({
+                next: () => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.map(a => a.id === accountId ? updated : a)
+                    );
+                },
+                error: (err) => console.error('Error adding holdings:', err)
+            });
+        }
+    }
+
+    updateHoldingPrices(accountId: string, priceUpdates: Map<string, number>): Observable<void> {
+        const account = this.getById(accountId);
+        if (!account) return of(void 0);
+
+        const updated = {
+            ...account,
+            holdings: account.holdings.map(h => {
+                const newPrice = h.ticker ? priceUpdates.get(h.ticker.toUpperCase()) : undefined;
+                if (newPrice !== undefined && h.shares) {
+                    return { ...h, currentValue: h.shares * newPrice };
+                }
+                return h;
+            }),
+            updatedAt: new Date()
+        };
+
+        if (this.electronStorage.isElectron()) {
+            this.accountsSignal.update(accounts =>
+                accounts.map(a => a.id === accountId ? updated : a)
+            );
+            this.saveToElectron();
+            return of(void 0);
+        } else {
+            return this.http.put<RetirementAccount>(`${this.API_URL}/${accountId}`, updated).pipe(
+                tap(() => {
+                    this.accountsSignal.update(accounts =>
+                        accounts.map(a => a.id === accountId ? updated : a)
+                    );
+                }),
+                map(() => void 0)
+            );
         }
     }
 
