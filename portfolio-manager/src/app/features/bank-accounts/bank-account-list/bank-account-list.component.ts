@@ -5,10 +5,10 @@ import { BankService } from '../../../core/services/bank.service';
 import { BankAccount, BankAccountType, getAccountTypeLabel } from '../../../core/models/bank-account.model';
 
 @Component({
-    selector: 'app-bank-account-list',
-    standalone: true,
-    imports: [CommonModule, FormsModule, CurrencyPipe, PercentPipe],
-    template: `
+  selector: 'app-bank-account-list',
+  standalone: true,
+  imports: [CommonModule, FormsModule, CurrencyPipe, PercentPipe],
+  template: `
     <div class="page animate-fade-in">
       <header class="page-header">
         <div>
@@ -47,25 +47,40 @@ import { BankAccount, BankAccountType, getAccountTypeLabel } from '../../../core
           <button class="btn btn-primary" (click)="showAddModal = true">Add Account</button>
         </div>
       } @else {
-        <div class="account-grid">
-          @for (account of bankService.accounts(); track account.id) {
-            <div class="account-card card">
-              <div class="account-header">
-                <span class="account-name">{{ account.name }}</span>
-                <div class="account-actions">
-                  <button class="btn btn-icon btn-secondary" (click)="editAccount(account)" title="Edit">✏️</button>
-                  <button class="btn btn-icon btn-secondary" (click)="confirmDelete(account)" title="Delete">🗑️</button>
+        <div class="bank-groups">
+          @for (bank of bankService.accountsByBank(); track bank.bankName) {
+            <div class="bank-group">
+              <div class="bank-header" (click)="toggleBank(bank.bankName)">
+                <div class="bank-info">
+                  <span class="expand-icon">{{ isExpanded(bank.bankName) ? '▼' : '▶' }}</span>
+                  <span class="bank-name">{{ bank.bankName }}</span>
+                  <span class="bank-count">{{ bank.accounts.length }} account{{ bank.accounts.length !== 1 ? 's' : '' }}</span>
                 </div>
+                <span class="bank-total">{{ bank.total | currency:'USD':'symbol':'1.0-0' }}</span>
               </div>
-              <div class="account-type">
-                <span class="badge" [class]="getBadgeClass(account.type)">{{ getTypeLabel(account.type) }}</span>
-                <span class="account-bank">{{ account.bankName }}</span>
-              </div>
-              <div class="account-balance">{{ account.balance | currency:'USD':'symbol':'1.2-2' }}</div>
-              @if (account.interestRate) {
-                <div class="account-interest">
-                  <span>APY:</span>
-                  <span class="interest-value">{{ account.interestRate | percent:'1.2-2' }}</span>
+              @if (isExpanded(bank.bankName)) {
+                <div class="account-grid">
+                  @for (account of bank.accounts; track account.id) {
+                    <div class="account-card card">
+                      <div class="account-header">
+                        <span class="account-name">{{ account.name }}</span>
+                        <div class="account-actions">
+                          <button class="btn btn-icon btn-secondary" (click)="editAccount(account)" title="Edit">✏️</button>
+                          <button class="btn btn-icon btn-secondary" (click)="confirmDelete(account)" title="Delete">🗑️</button>
+                        </div>
+                      </div>
+                      <div class="account-type">
+                        <span class="badge" [class]="getBadgeClass(account.type)">{{ getTypeLabel(account.type) }}</span>
+                      </div>
+                      <div class="account-balance">{{ account.balance | currency:'USD':'symbol':'1.2-2' }}</div>
+                      @if (account.interestRate) {
+                        <div class="account-interest">
+                          <span>APY:</span>
+                          <span class="interest-value">{{ account.interestRate | percent:'1.2-2' }}</span>
+                        </div>
+                      }
+                    </div>
+                  }
                 </div>
               }
             </div>
@@ -143,7 +158,7 @@ import { BankAccount, BankAccountType, getAccountTypeLabel } from '../../../core
       }
     </div>
   `,
-    styles: [`
+  styles: [`
     .page-header {
       display: flex;
       align-items: flex-start;
@@ -246,6 +261,72 @@ import { BankAccount, BankAccountType, getAccountTypeLabel } from '../../../core
     .badge-cd { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
     .badge-other { background: rgba(107, 114, 128, 0.15); color: #6b7280; }
 
+    .bank-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .bank-group {
+      background: rgba(30, 30, 50, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .bank-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .bank-header:hover {
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .bank-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .expand-icon {
+      color: #6a6a7a;
+      font-size: 0.75rem;
+      width: 16px;
+    }
+
+    .bank-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .bank-count {
+      font-size: 0.85rem;
+      color: #6a6a7a;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .bank-total {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    .bank-group .account-grid {
+      padding: 0 20px 20px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .bank-group .account-card {
+      background: rgba(20, 20, 35, 0.6);
+    }
+
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -260,86 +341,102 @@ import { BankAccount, BankAccountType, getAccountTypeLabel } from '../../../core
   `]
 })
 export class BankAccountListComponent {
-    bankService = inject(BankService);
+  bankService = inject(BankService);
 
-    showAddModal = false;
-    editingAccount = signal<BankAccount | null>(null);
-    deletingAccount = signal<BankAccount | null>(null);
+  showAddModal = false;
+  editingAccount = signal<BankAccount | null>(null);
+  deletingAccount = signal<BankAccount | null>(null);
+  expandedBanks = signal<Set<string>>(new Set());
 
-    formData = {
-        name: '',
-        type: 'checking' as BankAccountType,
-        bankName: '',
-        accountNumber: '',
-        balance: 0,
-        interestRate: 0
+  formData = {
+    name: '',
+    type: 'checking' as BankAccountType,
+    bankName: '',
+    accountNumber: '',
+    balance: 0,
+    interestRate: 0
+  };
+
+  toggleBank(bankName: string): void {
+    const current = this.expandedBanks();
+    const newSet = new Set(current);
+    if (newSet.has(bankName)) {
+      newSet.delete(bankName);
+    } else {
+      newSet.add(bankName);
+    }
+    this.expandedBanks.set(newSet);
+  }
+
+  isExpanded(bankName: string): boolean {
+    return this.expandedBanks().has(bankName);
+  }
+
+  getBalanceByType(type: BankAccountType): number {
+    return this.bankService.accounts()
+      .filter(a => a.type === type)
+      .reduce((sum, a) => sum + a.balance, 0);
+  }
+
+  getTypeLabel(type: BankAccountType): string {
+    return getAccountTypeLabel(type);
+  }
+
+  getBadgeClass(type: BankAccountType): string {
+    return `badge badge-${type}`;
+  }
+
+  editAccount(account: BankAccount): void {
+    this.editingAccount.set(account);
+    this.formData = {
+      name: account.name,
+      type: account.type,
+      bankName: account.bankName,
+      accountNumber: account.accountNumber || '',
+      balance: account.balance,
+      interestRate: account.interestRate || 0
     };
+  }
 
-    getBalanceByType(type: BankAccountType): number {
-        return this.bankService.accounts()
-            .filter(a => a.type === type)
-            .reduce((sum, a) => sum + a.balance, 0);
+  confirmDelete(account: BankAccount): void {
+    this.deletingAccount.set(account);
+  }
+
+  closeModal(): void {
+    this.showAddModal = false;
+    this.editingAccount.set(null);
+    this.formData = { name: '', type: 'checking', bankName: '', accountNumber: '', balance: 0, interestRate: 0 };
+  }
+
+  saveAccount(): void {
+    if (!this.formData.name || !this.formData.bankName) return;
+
+    if (this.editingAccount()) {
+      this.bankService.update(this.editingAccount()!.id, {
+        name: this.formData.name,
+        type: this.formData.type,
+        bankName: this.formData.bankName,
+        accountNumber: this.formData.accountNumber || undefined,
+        balance: Number(this.formData.balance),
+        interestRate: Number(this.formData.interestRate) || undefined
+      });
+    } else {
+      this.bankService.create({
+        name: this.formData.name,
+        type: this.formData.type,
+        bankName: this.formData.bankName,
+        accountNumber: this.formData.accountNumber || undefined,
+        balance: Number(this.formData.balance),
+        interestRate: Number(this.formData.interestRate) || undefined
+      });
     }
+    this.closeModal();
+  }
 
-    getTypeLabel(type: BankAccountType): string {
-        return getAccountTypeLabel(type);
+  deleteAccount(): void {
+    if (this.deletingAccount()) {
+      this.bankService.delete(this.deletingAccount()!.id);
+      this.deletingAccount.set(null);
     }
-
-    getBadgeClass(type: BankAccountType): string {
-        return `badge badge-${type}`;
-    }
-
-    editAccount(account: BankAccount): void {
-        this.editingAccount.set(account);
-        this.formData = {
-            name: account.name,
-            type: account.type,
-            bankName: account.bankName,
-            accountNumber: account.accountNumber || '',
-            balance: account.balance,
-            interestRate: account.interestRate || 0
-        };
-    }
-
-    confirmDelete(account: BankAccount): void {
-        this.deletingAccount.set(account);
-    }
-
-    closeModal(): void {
-        this.showAddModal = false;
-        this.editingAccount.set(null);
-        this.formData = { name: '', type: 'checking', bankName: '', accountNumber: '', balance: 0, interestRate: 0 };
-    }
-
-    saveAccount(): void {
-        if (!this.formData.name || !this.formData.bankName) return;
-
-        if (this.editingAccount()) {
-            this.bankService.update(this.editingAccount()!.id, {
-                name: this.formData.name,
-                type: this.formData.type,
-                bankName: this.formData.bankName,
-                accountNumber: this.formData.accountNumber || undefined,
-                balance: Number(this.formData.balance),
-                interestRate: Number(this.formData.interestRate) || undefined
-            });
-        } else {
-            this.bankService.create({
-                name: this.formData.name,
-                type: this.formData.type,
-                bankName: this.formData.bankName,
-                accountNumber: this.formData.accountNumber || undefined,
-                balance: Number(this.formData.balance),
-                interestRate: Number(this.formData.interestRate) || undefined
-            });
-        }
-        this.closeModal();
-    }
-
-    deleteAccount(): void {
-        if (this.deletingAccount()) {
-            this.bankService.delete(this.deletingAccount()!.id);
-            this.deletingAccount.set(null);
-        }
-    }
+  }
 }

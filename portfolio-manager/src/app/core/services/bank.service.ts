@@ -18,6 +18,27 @@ export class BankService {
         this.accountsSignal().reduce((sum, a) => sum + a.balance, 0)
     );
 
+    readonly accountsByBank = computed(() => {
+        const accounts = this.accountsSignal();
+        const grouped = new Map<string, { bankName: string; accounts: BankAccount[]; total: number }>();
+
+        accounts.forEach(account => {
+            const existing = grouped.get(account.bankName);
+            if (existing) {
+                existing.accounts.push(account);
+                existing.total += account.balance;
+            } else {
+                grouped.set(account.bankName, {
+                    bankName: account.bankName,
+                    accounts: [account],
+                    total: account.balance
+                });
+            }
+        });
+
+        return Array.from(grouped.values()).sort((a, b) => b.total - a.total);
+    });
+
     constructor(
         private http: HttpClient,
         private electronStorage: ElectronStorageService
