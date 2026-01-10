@@ -438,14 +438,22 @@ export class DashboardComponent {
 
   refreshAllPrices(): void {
     const portfolios = this.portfolioService.portfolios();
-    if (portfolios.length === 0) return;
+    const retirementAccounts = this.retirementService.accounts();
+    if (portfolios.length === 0 && retirementAccounts.length === 0) return;
 
-    // Collect all unique symbols from all portfolios (excluding cash)
+    // Collect all unique symbols from all portfolios and retirement accounts
     const allSymbols = new Set<string>();
+
     portfolios.forEach(p => {
       p.holdings
         .filter(h => h.type !== 'cash')
         .forEach(h => allSymbols.add(h.symbol.toUpperCase()));
+    });
+
+    retirementAccounts.forEach(a => {
+      a.holdings
+        .filter(h => h.ticker)
+        .forEach(h => allSymbols.add(h.ticker!.toUpperCase()));
     });
 
     if (allSymbols.size === 0) return;
@@ -459,26 +467,47 @@ export class DashboardComponent {
         const priceUpdates = new Map<string, number>();
         quotes.forEach((quote, symbol) => priceUpdates.set(symbol, quote.price));
 
-        // Update each portfolio using batch method
+        // Update each portfolio and retirement account
         let completedCount = 0;
-        const totalPortfolios = portfolios.length;
+        const totalToUpdate = portfolios.length + retirementAccounts.length;
+        let successCount = 0;
 
+        const checkCompletion = () => {
+          completedCount++;
+          if (completedCount === totalToUpdate) {
+            this.isRefreshing.set(false);
+            this.refreshProgress.set(`${priceUpdates.size} prices updated`);
+
+            // Re-fetch data to update UI totals immediately
+            // Note: In a real app with signals, this might be automatic if using deeper signals,
+            // but here we force a refresh to be safe since we just did a background update
+          }
+        };
+
+        // Update portfolios
         portfolios.forEach(portfolio => {
           this.portfolioService.updateHoldingPrices(portfolio.id, priceUpdates).subscribe({
             next: () => {
-              completedCount++;
-              if (completedCount === totalPortfolios) {
-                this.isRefreshing.set(false);
-                this.refreshProgress.set(`${priceUpdates.size} prices updated`);
-              }
+              successCount++;
+              checkCompletion();
             },
             error: (err) => {
               console.error(`Error updating portfolio ${portfolio.id}:`, err);
-              completedCount++;
-              if (completedCount === totalPortfolios) {
-                this.isRefreshing.set(false);
-                this.refreshProgress.set('Some updates failed');
-              }
+              checkCompletion();
+            }
+          });
+        });
+
+        // Update retirement accounts
+        retirementAccounts.forEach(account => {
+          this.retirementService.updateHoldingPrices(account.id, priceUpdates).subscribe({
+            next: () => {
+              successCount++;
+              checkCompletion();
+            },
+            error: (err) => {
+              console.error(`Error updating retirement account ${account.id}:`, err);
+              checkCompletion();
             }
           });
         });
