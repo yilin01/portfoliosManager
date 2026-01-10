@@ -44,47 +44,40 @@ import { RetirementAccount, RetirementAccountType, getAccountTypeLabel, calculat
           <button class="btn btn-primary" (click)="showAddModal = true">Add Account</button>
         </div>
       } @else {
-        <div class="account-grid">
-          @for (account of retirementService.accounts(); track account.id) {
-            <div class="account-card card">
-              <div class="account-header">
-                <a [routerLink]="['/retirement', account.id]" class="account-name">{{ account.name }}</a>
-                <div class="account-actions">
-                  <button class="btn btn-icon btn-secondary" (click)="editAccount(account)" title="Edit">✏️</button>
-                  <button class="btn btn-icon btn-secondary" (click)="confirmDelete(account)" title="Delete">🗑️</button>
+        <div class="provider-groups">
+          @for (group of retirementService.accountsByProvider(); track group.provider) {
+            <div class="provider-group">
+              <div class="provider-header" (click)="toggleProvider(group.provider)">
+                <div class="provider-info">
+                  <span class="expand-icon">{{ isExpanded(group.provider) ? '▼' : '▶' }}</span>
+                  <span class="provider-name">{{ group.provider }}</span>
+                  <span class="provider-count">{{ group.accounts.length }} account{{ group.accounts.length !== 1 ? 's' : '' }}</span>
                 </div>
+                <span class="provider-total">{{ group.total | currency:'USD':'symbol':'1.0-0' }}</span>
               </div>
-              <div class="account-type">
-                <span class="badge badge-info">{{ getTypeLabel(account.type) }}</span>
-                <span class="account-provider">{{ account.provider }}</span>
-              </div>
-              @if (account.employer) {
-                <div class="account-employer">{{ account.employer }}</div>
-              }
-              <div class="account-value">{{ getAccountValue(account) | currency:'USD':'symbol':'1.0-0' }}</div>
-              
-              <!-- Contribution Progress -->
-              <div class="contribution-section">
-                <div class="contribution-header">
-                  <span>YTD Contributions</span>
-                  <span>{{ account.contributionYTD | currency:'USD':'symbol':'1.0-0' }} / {{ getContributionLimit(account.type) | currency:'USD':'symbol':'1.0-0' }}</span>
-                </div>
-                <div class="contribution-bar">
-                  <div class="contribution-fill" [style.width.%]="getContributionProgress(account)"></div>
-                </div>
-                <div class="contribution-remaining">
-                  {{ getContributionRemaining(account) | currency:'USD':'symbol':'1.0-0' }} remaining
-                </div>
-              </div>
-
-              @if (account.vestingPercent !== undefined && account.vestingPercent < 100) {
-                <div class="vesting-info">
-                  <span>Vesting:</span>
-                  <span class="vesting-value">{{ account.vestingPercent }}%</span>
+              @if (isExpanded(group.provider)) {
+                <div class="account-grid">
+                  @for (account of group.accounts; track account.id) {
+                    <div class="account-card card">
+                      <div class="account-header">
+                        <a [routerLink]="['/retirement', account.id]" class="account-name">{{ account.name }}</a>
+                        <div class="account-actions">
+                          <button class="btn btn-icon btn-secondary" (click)="editAccount(account)" title="Edit">✏️</button>
+                          <button class="btn btn-icon btn-secondary" (click)="confirmDelete(account)" title="Delete">🗑️</button>
+                        </div>
+                      </div>
+                      <div class="account-type">
+                        <span class="badge badge-info">{{ getTypeLabel(account.type) }}</span>
+                      </div>
+                      @if (account.employer) {
+                        <div class="account-employer">{{ account.employer }}</div>
+                      }
+                      <div class="account-value">{{ getAccountValue(account) | currency:'USD':'symbol':'1.0-0' }}</div>
+                      <a [routerLink]="['/retirement', account.id]" class="account-link">View Holdings →</a>
+                    </div>
+                  }
                 </div>
               }
-              
-              <a [routerLink]="['/retirement', account.id]" class="account-link">View Holdings →</a>
             </div>
           }
         </div>
@@ -325,6 +318,72 @@ import { RetirementAccount, RetirementAccountType, getAccountTypeLabel, calculat
       }
     }
 
+    .provider-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .provider-group {
+      background: rgba(30, 30, 50, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .provider-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .provider-header:hover {
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .provider-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .expand-icon {
+      color: #6a6a7a;
+      font-size: 0.75rem;
+      width: 16px;
+    }
+
+    .provider-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .provider-count {
+      font-size: 0.85rem;
+      color: #6a6a7a;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .provider-total {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    .provider-group .account-grid {
+      padding: 0 20px 20px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .provider-group .account-card {
+      background: rgba(20, 20, 35, 0.6);
+    }
+
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -354,6 +413,7 @@ export class RetirementListComponent {
   showAddModal = false;
   editingAccount = signal<RetirementAccount | null>(null);
   deletingAccount = signal<RetirementAccount | null>(null);
+  expandedProviders = signal<Set<string>>(new Set());
 
   formData = {
     name: '',
@@ -365,6 +425,21 @@ export class RetirementListComponent {
     employerMatchYTD: 0,
     vestingPercent: 100
   };
+
+  toggleProvider(provider: string): void {
+    const current = this.expandedProviders();
+    const newSet = new Set(current);
+    if (newSet.has(provider)) {
+      newSet.delete(provider);
+    } else {
+      newSet.add(provider);
+    }
+    this.expandedProviders.set(newSet);
+  }
+
+  isExpanded(provider: string): boolean {
+    return this.expandedProviders().has(provider);
+  }
 
   totalContributionsYTD(): number {
     return this.retirementService.accounts().reduce((sum, a) => sum + a.contributionYTD, 0);

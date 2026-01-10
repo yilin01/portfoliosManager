@@ -6,10 +6,10 @@ import { PortfolioService } from '../../../core/services/portfolio.service';
 import { Portfolio, calculatePortfolioValue, calculatePortfolioCost } from '../../../core/models/portfolio.model';
 
 @Component({
-    selector: 'app-portfolio-list',
-    standalone: true,
-    imports: [CommonModule, RouterLink, FormsModule, CurrencyPipe, PercentPipe],
-    template: `
+  selector: 'app-portfolio-list',
+  standalone: true,
+  imports: [CommonModule, RouterLink, FormsModule, CurrencyPipe, PercentPipe],
+  template: `
     <div class="page animate-fade-in">
       <header class="page-header">
         <div>
@@ -48,25 +48,40 @@ import { Portfolio, calculatePortfolioValue, calculatePortfolioCost } from '../.
           <button class="btn btn-primary" (click)="showAddModal = true">Add Portfolio</button>
         </div>
       } @else {
-        <div class="portfolio-grid">
-          @for (portfolio of portfolioService.portfolios(); track portfolio.id) {
-            <div class="portfolio-card card">
-              <div class="portfolio-header">
-                <a [routerLink]="['/portfolios', portfolio.id]" class="portfolio-name">{{ portfolio.name }}</a>
-                <div class="portfolio-actions">
-                  <button class="btn btn-icon btn-secondary" (click)="editPortfolio(portfolio)" title="Edit">✏️</button>
-                  <button class="btn btn-icon btn-secondary" (click)="confirmDelete(portfolio)" title="Delete">🗑️</button>
+        <div class="broker-groups">
+          @for (group of portfolioService.portfoliosByBroker(); track group.broker) {
+            <div class="broker-group">
+              <div class="broker-header" (click)="toggleBroker(group.broker)">
+                <div class="broker-info">
+                  <span class="expand-icon">{{ isExpanded(group.broker) ? '▼' : '▶' }}</span>
+                  <span class="broker-name">{{ group.broker }}</span>
+                  <span class="broker-count">{{ group.portfolios.length }} portfolio{{ group.portfolios.length !== 1 ? 's' : '' }}</span>
                 </div>
+                <span class="broker-total">{{ group.total | currency:'USD':'symbol':'1.0-0' }}</span>
               </div>
-              <div class="portfolio-broker">{{ portfolio.broker }}</div>
-              <div class="portfolio-value">{{ getPortfolioValue(portfolio) | currency:'USD':'symbol':'1.0-0' }}</div>
-              <div class="portfolio-meta">
-                <span>{{ portfolio.holdings.length }} holdings</span>
-                <span [class]="getGainLossClass(portfolio)">
-                  {{ getGainLossPercent(portfolio) | percent:'1.1-1' }}
-                </span>
-              </div>
-              <a [routerLink]="['/portfolios', portfolio.id]" class="portfolio-link">View Details →</a>
+              @if (isExpanded(group.broker)) {
+                <div class="portfolio-grid">
+                  @for (portfolio of group.portfolios; track portfolio.id) {
+                    <div class="portfolio-card card">
+                      <div class="portfolio-header">
+                        <a [routerLink]="['/portfolios', portfolio.id]" class="portfolio-name">{{ portfolio.name }}</a>
+                        <div class="portfolio-actions">
+                          <button class="btn btn-icon btn-secondary" (click)="editPortfolio(portfolio)" title="Edit">✏️</button>
+                          <button class="btn btn-icon btn-secondary" (click)="confirmDelete(portfolio)" title="Delete">🗑️</button>
+                        </div>
+                      </div>
+                      <div class="portfolio-value">{{ getPortfolioValue(portfolio) | currency:'USD':'symbol':'1.0-0' }}</div>
+                      <div class="portfolio-meta">
+                        <span>{{ portfolio.holdings.length }} holdings</span>
+                        <span [class]="getGainLossClass(portfolio)">
+                          {{ getGainLossPercent(portfolio) | percent:'1.1-1' }}
+                        </span>
+                      </div>
+                      <a [routerLink]="['/portfolios', portfolio.id]" class="portfolio-link">View Details →</a>
+                    </div>
+                  }
+                </div>
+              }
             </div>
           }
         </div>
@@ -120,7 +135,7 @@ import { Portfolio, calculatePortfolioValue, calculatePortfolioCost } from '../.
       }
     </div>
   `,
-    styles: [`
+  styles: [`
     .page-header {
       display: flex;
       align-items: flex-start;
@@ -229,6 +244,72 @@ import { Portfolio, calculatePortfolioValue, calculatePortfolioCost } from '../.
     .value-positive { color: #22c55e; }
     .value-negative { color: #ef4444; }
 
+    .broker-groups {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .broker-group {
+      background: rgba(30, 30, 50, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .broker-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .broker-header:hover {
+      background: rgba(99, 102, 241, 0.08);
+    }
+
+    .broker-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .expand-icon {
+      color: #6a6a7a;
+      font-size: 0.75rem;
+      width: 16px;
+    }
+
+    .broker-name {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .broker-count {
+      font-size: 0.85rem;
+      color: #6a6a7a;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+
+    .broker-total {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #22c55e;
+    }
+
+    .broker-group .portfolio-grid {
+      padding: 0 20px 20px 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .broker-group .portfolio-card {
+      background: rgba(20, 20, 35, 0.6);
+    }
+
     @media (max-width: 768px) {
       .page-header {
         flex-direction: column;
@@ -243,81 +324,97 @@ import { Portfolio, calculatePortfolioValue, calculatePortfolioCost } from '../.
   `]
 })
 export class PortfolioListComponent {
-    portfolioService = inject(PortfolioService);
+  portfolioService = inject(PortfolioService);
 
-    showAddModal = false;
-    editingPortfolio = signal<Portfolio | null>(null);
-    deletingPortfolio = signal<Portfolio | null>(null);
+  showAddModal = false;
+  editingPortfolio = signal<Portfolio | null>(null);
+  deletingPortfolio = signal<Portfolio | null>(null);
+  expandedBrokers = signal<Set<string>>(new Set());
 
-    formData = {
-        name: '',
-        broker: '',
-        accountNumber: ''
+  formData = {
+    name: '',
+    broker: '',
+    accountNumber: ''
+  };
+
+  toggleBroker(broker: string): void {
+    const current = this.expandedBrokers();
+    const newSet = new Set(current);
+    if (newSet.has(broker)) {
+      newSet.delete(broker);
+    } else {
+      newSet.add(broker);
+    }
+    this.expandedBrokers.set(newSet);
+  }
+
+  isExpanded(broker: string): boolean {
+    return this.expandedBrokers().has(broker);
+  }
+
+  totalGainLoss(): number {
+    return this.portfolioService.portfolios().reduce((sum, p) => {
+      return sum + (calculatePortfolioValue(p) - calculatePortfolioCost(p));
+    }, 0);
+  }
+
+  getPortfolioValue(portfolio: Portfolio): number {
+    return calculatePortfolioValue(portfolio);
+  }
+
+  getGainLossPercent(portfolio: Portfolio): number {
+    const value = calculatePortfolioValue(portfolio);
+    const cost = calculatePortfolioCost(portfolio);
+    if (cost === 0) return 0;
+    return (value - cost) / cost;
+  }
+
+  getGainLossClass(portfolio: Portfolio): string {
+    return this.getGainLossPercent(portfolio) >= 0 ? 'value-positive' : 'value-negative';
+  }
+
+  editPortfolio(portfolio: Portfolio): void {
+    this.editingPortfolio.set(portfolio);
+    this.formData = {
+      name: portfolio.name,
+      broker: portfolio.broker,
+      accountNumber: portfolio.accountNumber || ''
     };
+  }
 
-    totalGainLoss(): number {
-        return this.portfolioService.portfolios().reduce((sum, p) => {
-            return sum + (calculatePortfolioValue(p) - calculatePortfolioCost(p));
-        }, 0);
+  confirmDelete(portfolio: Portfolio): void {
+    this.deletingPortfolio.set(portfolio);
+  }
+
+  closeModal(): void {
+    this.showAddModal = false;
+    this.editingPortfolio.set(null);
+    this.formData = { name: '', broker: '', accountNumber: '' };
+  }
+
+  savePortfolio(): void {
+    if (!this.formData.name || !this.formData.broker) return;
+
+    if (this.editingPortfolio()) {
+      this.portfolioService.update(this.editingPortfolio()!.id, {
+        name: this.formData.name,
+        broker: this.formData.broker,
+        accountNumber: this.formData.accountNumber || undefined
+      });
+    } else {
+      this.portfolioService.create({
+        name: this.formData.name,
+        broker: this.formData.broker,
+        accountNumber: this.formData.accountNumber || undefined
+      });
     }
+    this.closeModal();
+  }
 
-    getPortfolioValue(portfolio: Portfolio): number {
-        return calculatePortfolioValue(portfolio);
+  deletePortfolio(): void {
+    if (this.deletingPortfolio()) {
+      this.portfolioService.delete(this.deletingPortfolio()!.id);
+      this.deletingPortfolio.set(null);
     }
-
-    getGainLossPercent(portfolio: Portfolio): number {
-        const value = calculatePortfolioValue(portfolio);
-        const cost = calculatePortfolioCost(portfolio);
-        if (cost === 0) return 0;
-        return (value - cost) / cost;
-    }
-
-    getGainLossClass(portfolio: Portfolio): string {
-        return this.getGainLossPercent(portfolio) >= 0 ? 'value-positive' : 'value-negative';
-    }
-
-    editPortfolio(portfolio: Portfolio): void {
-        this.editingPortfolio.set(portfolio);
-        this.formData = {
-            name: portfolio.name,
-            broker: portfolio.broker,
-            accountNumber: portfolio.accountNumber || ''
-        };
-    }
-
-    confirmDelete(portfolio: Portfolio): void {
-        this.deletingPortfolio.set(portfolio);
-    }
-
-    closeModal(): void {
-        this.showAddModal = false;
-        this.editingPortfolio.set(null);
-        this.formData = { name: '', broker: '', accountNumber: '' };
-    }
-
-    savePortfolio(): void {
-        if (!this.formData.name || !this.formData.broker) return;
-
-        if (this.editingPortfolio()) {
-            this.portfolioService.update(this.editingPortfolio()!.id, {
-                name: this.formData.name,
-                broker: this.formData.broker,
-                accountNumber: this.formData.accountNumber || undefined
-            });
-        } else {
-            this.portfolioService.create({
-                name: this.formData.name,
-                broker: this.formData.broker,
-                accountNumber: this.formData.accountNumber || undefined
-            });
-        }
-        this.closeModal();
-    }
-
-    deletePortfolio(): void {
-        if (this.deletingPortfolio()) {
-            this.portfolioService.delete(this.deletingPortfolio()!.id);
-            this.deletingPortfolio.set(null);
-        }
-    }
+  }
 }

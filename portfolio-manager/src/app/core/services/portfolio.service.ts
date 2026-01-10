@@ -18,6 +18,28 @@ export class PortfolioService {
         this.portfoliosSignal().reduce((sum, p) => sum + calculatePortfolioValue(p), 0)
     );
 
+    readonly portfoliosByBroker = computed(() => {
+        const portfolios = this.portfoliosSignal();
+        const grouped = new Map<string, { broker: string; portfolios: Portfolio[]; total: number }>();
+
+        portfolios.forEach(portfolio => {
+            const value = calculatePortfolioValue(portfolio);
+            const existing = grouped.get(portfolio.broker);
+            if (existing) {
+                existing.portfolios.push(portfolio);
+                existing.total += value;
+            } else {
+                grouped.set(portfolio.broker, {
+                    broker: portfolio.broker,
+                    portfolios: [portfolio],
+                    total: value
+                });
+            }
+        });
+
+        return Array.from(grouped.values()).sort((a, b) => b.total - a.total);
+    });
+
     constructor(
         private http: HttpClient,
         private electronStorage: ElectronStorageService

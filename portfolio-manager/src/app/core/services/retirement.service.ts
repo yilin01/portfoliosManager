@@ -20,6 +20,28 @@ export class RetirementService {
         this.accountsSignal().reduce((sum, a) => sum + calculateRetirementAccountValue(a), 0)
     );
 
+    readonly accountsByProvider = computed(() => {
+        const accounts = this.accountsSignal();
+        const grouped = new Map<string, { provider: string; accounts: RetirementAccount[]; total: number }>();
+
+        accounts.forEach(account => {
+            const value = calculateRetirementAccountValue(account);
+            const existing = grouped.get(account.provider);
+            if (existing) {
+                existing.accounts.push(account);
+                existing.total += value;
+            } else {
+                grouped.set(account.provider, {
+                    provider: account.provider,
+                    accounts: [account],
+                    total: value
+                });
+            }
+        });
+
+        return Array.from(grouped.values()).sort((a, b) => b.total - a.total);
+    });
+
     constructor(
         private http: HttpClient,
         private electronStorage: ElectronStorageService
